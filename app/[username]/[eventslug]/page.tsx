@@ -148,7 +148,9 @@ export default function BookingPage({
     if (!event) return;
     const pad = (n: number) => String(n).padStart(2, "0");
     const date = `${year}-${pad(month + 1)}-${pad(day)}`;
-    fetch(`${API_BASE}/bookings/taken?eventTypeId=${event.id}&date=${date}`)
+    // Pass the browser's UTC offset so the server queries the correct local-day window
+    const tzOffset = new Date().getTimezoneOffset();
+    fetch(`${API_BASE}/bookings/taken?eventTypeId=${event.id}&date=${date}&tzOffset=${tzOffset}`)
       .then((r) => r.json())
       .then((data: { taken: Array<{ start: string; end: string }>; dateOverride: DateOverride | null }) => {
         setTakenSlots(data.taken ?? []);
@@ -183,25 +185,28 @@ export default function BookingPage({
       generated = generateSlotsForDay(dow, availability, event.duration, cutoff);
     }
 
-    // Convert a display string like "9:30 AM" to minutes-from-midnight.
-    const slotToMins = (s: string) => {
-      const [time, period] = s.split(" ");
-      const [hStr, mStr] = time.split(":");
+    // Filter using exact timestamp comparisons against the taken intervals.
+    // takenSlots entries are ISO strings already expanded by bufferTime on the server.
+    return generated.filter((slot) => {
+      // Parse display string (e.g. "9:30 AM") into a full local Date for this calendar day.
+      const [timePart, period] = slot.split(" ");
+      const [hStr, mStr] = timePart.split(":");
       let h = parseInt(hStr);
       const m = parseInt(mStr);
       if (period === "AM" && h === 12) h = 0;
       if (period === "PM" && h !== 12) h += 12;
-      return h * 60 + m;
-    };
-    // taken intervals already include buffer expansion from the server
-    const conflicts = takenSlots.map(({ start, end }) => ({
-      startMins: new Date(start).getHours() * 60 + new Date(start).getMinutes(),
-      endMins:   new Date(end).getHours()   * 60 + new Date(end).getMinutes(),
-    }));
-    return generated.filter((slot) => {
-      const slotStart = slotToMins(slot);
-      const slotEnd   = slotStart + event.duration;
-      return !conflicts.some((c) => slotStart < c.endMins && slotEnd > c.startMins);
+      const slotStart = new Date(calYear, calMonth, selectedDay, h, m, 0, 0);
+      const slotEnd   = new Date(slotStart.getTime() + event.duration * 60 * 1000);
+
+      const isSlotAvailable = !takenSlots.some((taken) => {
+        const takenStart = new Date(taken.start).getTime();
+        const takenEnd   = new Date(taken.end).getTime();
+        const slotS = slotStart.getTime();
+        const slotE = slotEnd.getTime();
+        // Overlap: slot starts before taken ends AND slot ends after taken starts
+        return slotS < takenEnd && slotE > takenStart;
+      });
+      return isSlotAvailable;
     });
   }, [event, selectedDay, calYear, calMonth, availability, takenSlots, dateOverride]);
 
