@@ -14,13 +14,13 @@
 // });
 
 import "dotenv/config";
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    // Adding the ?? makes it fallback to the DATABASE_URL if DIRECT_URL is missing
-    // during the build phase on Railway.
-    url: env("DIRECT_URL", { required: false }) ?? env("DATABASE_URL"),
+    // We use standard process.env here. If DIRECT_URL isn't there,
+    // it falls back to DATABASE_URL immediately without throwing a Prisma error.
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL,
   },
 });
