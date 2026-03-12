@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+// ------------------------------------------------------
+// MODELS
+// ------------------------------------------------------
+
+// Assume a single default user as per the assignment instructions
+model User {
+  id                   String                 @id @default(uuid())
+  name                 String
+  email                String                 @unique
+  timezone             String                 @default("Asia/Kolkata") // Configured from the Availability page
+  eventTypes           EventType[]
+  availabilities       Availability[]
+  dateOverrides        DateOverride[]
+}
+
+// Represents the types of meetings (e.g., "15 Min Meeting", "30 Min Consultation")
+model EventType {
+  id          String    @id @default(uuid())
+  title       String
+  description String?   // Optional field
+  duration    Int       // Stored in minutes (e.g., 15, 30, 60)
+  slug        String    @unique // e.g., "15min" (Used for the public booking link)
+  bufferTime  Int       @default(0) // Minutes of buffer to pad before/after each booking
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  
+  bookings    Booking[]
+}
+
+// Represents the recurring weekly schedule (e.g., "Mondays 09:00 - 17:00")
+model Availability {
+  id         String                @id @default(uuid())
+  dayOfWeek  Int                   // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  startTime  String                // Stored as "HH:mm" string (e.g., "09:00") to avoid timezone shifting issues
+  endTime    String                // Stored as "HH:mm" string (e.g., "17:00")
+  
+  user       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String
+}
+
+// Overrides the regular weekly schedule for a specific calendar date
+model DateOverride {
+  id        String   @id @default(uuid())
+  date      DateTime // The specific date being overridden (stored as UTC midnight)
+  startTime String?  // "HH:mm" — null means the whole day is blocked
+  endTime   String?  // "HH:mm" — null means the whole day is blocked
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+}
+
+// Represents a successfully scheduled meeting by an external guest
+model Booking {
+  id           String        @id @default(uuid())
+  bookerName   String
+  bookerEmail  String
+  notes        String?       // Optional message from the booker
+  startTime    DateTime      // Absolute UTC timestamp of when the meeting starts
+  endTime      DateTime      // Absolute UTC timestamp of when the meeting ends
+  status       BookingStatus @default(UPCOMING)
+  
+  eventType    EventType     @relation(fields: [eventTypeId], references: [id], onDelete: Cascade)
+  eventTypeId  String
+  
+  createdAt    DateTime      @default(now())
+}
+
+// Enum to easily filter the bookings dashboard
+enum BookingStatus {
+  UPCOMING
+  PAST
+  CANCELLED
+}
