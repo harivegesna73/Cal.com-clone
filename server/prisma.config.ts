@@ -21,6 +21,6 @@ export default defineConfig({
   datasource: {
     // Adding the ?? makes it fallback to the DATABASE_URL if DIRECT_URL is missing
     // during the build phase on Railway.
-    url: env("DIRECT_URL") ?? env("DATABASE_URL"),
+    url: env("DIRECT_URL", { required: false }) ?? env("DATABASE_URL"),
   },
 });
