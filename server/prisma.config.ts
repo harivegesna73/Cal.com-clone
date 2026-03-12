@@ -19,7 +19,8 @@ import { defineConfig, env } from "prisma/config";
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    // The Prisma CLI needs the Direct URL to push changes to Supabase
-    url: env("DIRECT_URL"), 
+    // Adding the ?? makes it fallback to the DATABASE_URL if DIRECT_URL is missing
+    // during the build phase on Railway.
+    url: env("DIRECT_URL") ?? env("DATABASE_URL"),
   },
 });
