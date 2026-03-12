@@ -266,11 +266,11 @@ app.delete("/api/date-overrides/:id", async (req, res) => {
 
 // ── Bookings ──────────────────────────────────────────────────────────────────
 
-// GET /api/bookings/taken?eventTypeId=xxx&date=YYYY-MM-DD
+// GET /api/bookings/taken?eventTypeId=xxx&date=YYYY-MM-DD&tzOffset=<getTimezoneOffset()>
 // Returns all UPCOMING booking intervals + bufferTime expansion for the host.
 // Also returns dateOverride if one exists for that date.
 app.get("/api/bookings/taken", async (req, res) => {
-  const { eventTypeId, date } = req.query;
+  const { eventTypeId, date, tzOffset: tzOffsetStr } = req.query;
   if (!eventTypeId || !date) {
     return res.status(400).json({ error: "eventTypeId and date are required." });
   }
@@ -281,15 +281,20 @@ app.get("/api/bookings/taken", async (req, res) => {
     });
     if (!eventType) return res.status(404).json({ error: "Event type not found." });
 
-    const dayStart = new Date(`${date}T00:00:00.000Z`);
-    const dayEnd   = new Date(`${date}T23:59:59.999Z`);
-    const buffer   = eventType.bufferTime ?? 0; // minutes
+    // tzOffset is browser's getTimezoneOffset() — positive = behind UTC, negative = ahead.
+    // e.g. IST (UTC+5:30) returns -330. We apply it to find the correct UTC window
+    // so that early-morning local slots (which are previous-UTC-day) are included.
+    const tzOffset = parseInt(String(tzOffsetStr ?? "0"), 10) || 0;
+    const utcMidnight = new Date(`${date}T00:00:00.000Z`);
+    const localDayStart = new Date(utcMidnight.getTime() + tzOffset * 60 * 1000);
+    const localDayEnd   = new Date(localDayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const buffer = eventType.bufferTime ?? 0; // minutes
 
     const bookings = await prisma.booking.findMany({
       where: {
         eventType: { userId: eventType.userId },
         status: "UPCOMING",
-        startTime: { gte: dayStart, lte: dayEnd },
+        startTime: { gte: localDayStart, lte: localDayEnd },
       },
       select: { startTime: true, endTime: true },
     });
@@ -300,9 +305,9 @@ app.get("/api/bookings/taken", async (req, res) => {
       end:   new Date(b.endTime.getTime()   + buffer * 60 * 1000).toISOString(),
     }));
 
-    // Check if there's a date override for this day
+    // DateOverride is stored as UTC midnight of the date string — use utcMidnight for this lookup
     const override = await prisma.dateOverride.findFirst({
-      where: { userId: eventType.userId, date: dayStart },
+      where: { userId: eventType.userId, date: utcMidnight },
     });
 
     res.json({
