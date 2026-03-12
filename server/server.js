@@ -51,7 +51,9 @@ const nodemailer = require("nodemailer");
 
 // ── Real Email Configuration ──────────────────────────────────────────────────
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true, // true for 465, false for other ports
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -370,7 +372,7 @@ app.post("/api/bookings", async (req, res) => {
     });
 
     const start = new Date(startTime).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" });
-    await sendEmail(
+    sendEmail(
       bookerEmail,
       `Booking Confirmed: ${eventType.title}`,
       `  Hi ${bookerName},\n\n  Your booking for "${eventType.title}" has been confirmed.\n\n  📅  ${start}\n  ⏱  ${eventType.duration} minutes\n  📍  Google Meet\n\n  See you then!`
@@ -411,7 +413,7 @@ app.put("/api/bookings/:id/reschedule", async (req, res) => {
     });
 
     const newStart = new Date(startTime).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" });
-    await sendEmail(
+    sendEmail(
       booking.bookerEmail,
       `Booking Rescheduled: ${booking.eventType.title}`,
       `  Hi ${booking.bookerName},\n\n  Your booking for "${booking.eventType.title}" has been rescheduled.\n\n  📅  New time: ${newStart}\n  ⏱  ${booking.eventType.duration} minutes\n  📍  Google Meet\n\n  See you then!`
@@ -439,7 +441,7 @@ app.delete("/api/bookings/:id", async (req, res) => {
       data: { status: "CANCELLED" },
     });
 
-    await sendEmail(
+    sendEmail(
       booking.bookerEmail,
       `Booking Cancelled: ${booking.eventType.title}`,
       `  Hi ${booking.bookerName},\n\n  Your booking for "${booking.eventType.title}" has been cancelled.\n\n  If you'd like to reschedule, please visit the booking page again.\n\n  Sorry for any inconvenience.`
